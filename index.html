@@ -31,6 +31,14 @@
       padding-top: 20px;
     }
 
+    ul li {
+      cursor: pointer;
+    }
+
+    ul li:hover {
+      background-color: #f2f2f2;
+    }
+
     @media print {
       @page {
         size: A6;
@@ -76,9 +84,11 @@
   <h3>Scanned Items</h3>
   <ul id="item-list"></ul>
   <p><strong>Total: ₱<span id="total">0</span></strong></p>
+  <small>Click an item to remove it.</small>
 </div>
 
 <button onclick="generateInvoice()">Generate Invoice</button>
+<button onclick="resetInvoice()">Reset</button>
 
 <div id="invoice">
   <h3>Invoice</h3>
@@ -87,7 +97,7 @@
   <p><strong>Customer:</strong> <span id="inv-customer"></span></p>
   <ul id="inv-items"></ul>
   <p><strong>Total:</strong> ₱<span id="inv-total"></span></p>
-  <button onclick="printAndReset()">Print Invoice (A6)</button>
+  <button onclick="window.print()">Print Invoice (A6)</button>
 </div>
 
 <script src="https://unpkg.com/html5-qrcode"></script>
@@ -95,6 +105,10 @@
   let total = 0;
   let items = [];
   let html5QrCode;
+  let lastScanTime = 0;
+
+  // 🔊 Beep sound
+  const beep = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YYAAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA=");
 
   function startScanner() {
     document.getElementById("scanner").style.display = "block";
@@ -104,12 +118,17 @@
       { facingMode: "environment" },
       { fps: 10, qrbox: 250 },
       qrCodeMessage => {
+        const now = Date.now();
+        if (now - lastScanTime < 1500) return; // 1.5s cooldown
+        lastScanTime = now;
+
         if (qrCodeMessage.startsWith("P")) {
           const amount = parseInt(qrCodeMessage.replace("P", ""));
           if (!isNaN(amount)) {
             items.push(amount);
             total += amount;
             updateItemList();
+            beep.play(); // 🔊 Play sound
           }
         }
       },
@@ -128,11 +147,19 @@
   function updateItemList() {
     const list = document.getElementById("item-list");
     list.innerHTML = "";
-    items.forEach(item => {
+
+    items.forEach((item, index) => {
       const li = document.createElement("li");
       li.innerText = `₱${item}`;
+      li.title = "Click to remove this item";
+      li.onclick = () => {
+        total -= item;
+        items.splice(index, 1);
+        updateItemList();
+      };
       list.appendChild(li);
     });
+
     document.getElementById("total").innerText = total;
   }
 
@@ -158,10 +185,7 @@
     document.getElementById("inv-total").innerText = total;
   }
 
-  function printAndReset() {
-    window.print();
-
-    // Reset all values
+  function resetInvoice() {
     total = 0;
     items = [];
     document.getElementById("customer-name").value = "";
