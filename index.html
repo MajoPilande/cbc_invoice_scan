@@ -136,9 +136,10 @@
   <button onclick="window.print()">Print Invoice (A6)</button>
 </div>
 
+<script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-database-compat.js"></script>
+
 <script src="https://unpkg.com/html5-qrcode"></script>
-<script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-database.js"></script>
 <script>
   let total = 0;
   let items = [];
@@ -249,9 +250,13 @@
   };
 
   firebase.initializeApp(firebaseConfig);
+  console.log("✅ Firebase Initialized");
+
   const db = firebase.database();
 
   function saveOrder() {
+    console.log("🟡 Save Order clicked");
+
     const orderData = {
       customerName: document.getElementById("customer-name").value,
       customerAddress: document.getElementById("customer-address").value,
@@ -263,8 +268,15 @@
     };
 
     db.ref("orders").push(orderData)
-      .then(() => alert("✅ Order saved to Firebase!"))
-      .catch(error => alert("❌ Error saving order: " + error.message));
+    .then(() => {
+      alert("✅ Order saved to Firebase!");
+      console.log("✅ Firebase push successful");
+    })
+    .catch(error => {
+      alert("❌ Error saving order: " + error.message);
+      console.error("Firebase Save Error:", error);
+    });
+
   }
 </script>
 
