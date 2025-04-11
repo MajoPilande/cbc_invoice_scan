@@ -2,38 +2,51 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Order Entry - Curated by Celina</title>
+  <title>POS Order + Scanner</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      padding: 20px;
       max-width: 600px;
       margin: auto;
-    }
-    input, select, button {
-      width: 100%;
-      padding: 10px;
-      margin-bottom: 15px;
+      padding: 20px;
     }
     h2 {
       text-align: center;
     }
+    input, select, button {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+    #scanner-section {
+      margin-top: 30px;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+    ul li {
+      margin: 5px 0;
+    }
   </style>
 </head>
 <body>
-  <h2>New Order Entry</h2>
+  <h2>POS Order + Scanner</h2>
+
   <form id="orderForm">
     <input type="text" id="customerName" placeholder="Customer Name" required />
     <input type="text" id="customerAddress" placeholder="Customer Address" required />
     <input type="text" id="customerContact" placeholder="Customer Contact Number" required />
+
     <select id="minerType" required>
       <option value="">Select Miner Type</option>
       <option value="Old Miner">Old Miner</option>
       <option value="New Miner">New Miner</option>
     </select>
+
     <input type="date" id="orderDate" required />
-    <input type="number" id="numItems" placeholder="Number of Items" required />
-    <input type="number" id="totalOrder" placeholder="Total Order Amount" required />
+    <input type="number" id="numItems" placeholder="Number of Items" readonly />
+    <input type="number" id="totalOrder" placeholder="Total Order Amount" readonly />
 
     <select id="shippingStatus" required>
       <option value="">Select Shipping Status</option>
@@ -56,15 +69,19 @@
     </select>
 
     <button type="submit">Save Order</button>
-    <a href="index.html">
-        <button type="button">Proceed to Scanning</button>
-    </a>
-      
   </form>
+
+  <div id="scanner-section">
+    <h3>Scan Items</h3>
+    <div id="reader" width="100%"></div>
+    <ul id="item-list"></ul>
+    <p><strong>Total: ₱<span id="total">0</span></strong></p>
+  </div>
 
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-database.js"></script>
+  <script src="https://unpkg.com/html5-qrcode"></script>
   <script>
     const firebaseConfig = {
         apiKey: "AIzaSyA8hwnrtDAjTQRBaLA-xoEGkBAMoqqqgs8",
@@ -78,11 +95,49 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
+    // Set date
     document.getElementById("orderDate").valueAsDate = new Date();
 
+    // Scanner logic
+    let total = 0;
+    let items = [];
+    let lastScanTime = 0;
+    const list = document.getElementById("item-list");
+
+    const beep = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YYAAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA=");
+
+    const scanner = new Html5Qrcode("reader");
+    scanner.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: 250 },
+      (qrCodeMessage) => {
+        const now = Date.now();
+        if (now - lastScanTime < 1500) return;
+        lastScanTime = now;
+
+        if (qrCodeMessage.startsWith("P")) {
+          const amount = parseInt(qrCodeMessage.replace("P", ""));
+          if (!isNaN(amount)) {
+            items.push(amount);
+            total += amount;
+            document.getElementById("total").innerText = total;
+            document.getElementById("numItems").value = items.length;
+            document.getElementById("totalOrder").value = total;
+
+            const li = document.createElement("li");
+            li.innerText = `₱${amount}`;
+            list.appendChild(li);
+
+            beep.play();
+          }
+        }
+      },
+      () => {}
+    );
+
+    // Save to Firebase
     document.getElementById("orderForm").addEventListener("submit", function(e) {
       e.preventDefault();
-
       const orderData = {
         customerName: document.getElementById("customerName").value,
         customerAddress: document.getElementById("customerAddress").value,
@@ -93,12 +148,17 @@
         totalOrder: parseFloat(document.getElementById("totalOrder").value),
         shippingStatus: document.getElementById("shippingStatus").value,
         paymentStatus: document.getElementById("paymentStatus").value,
-        shippingFeeStatus: document.getElementById("shippingFeeStatus").value
+        shippingFeeStatus: document.getElementById("shippingFeeStatus").value,
+        scannedItems: items
       };
 
       db.ref("orders").push(orderData).then(() => {
-        alert("Order saved successfully!");
+        alert("Order saved!");
         document.getElementById("orderForm").reset();
+        document.getElementById("item-list").innerHTML = "";
+        document.getElementById("total").innerText = "0";
+        total = 0;
+        items = [];
         document.getElementById("orderDate").valueAsDate = new Date();
       });
     });

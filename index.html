@@ -10,69 +10,52 @@
       margin: 0 auto;
       padding: 20px;
     }
-
-    input, button {
+    input, button, select {
       padding: 10px;
       width: 100%;
       margin: 10px 0;
     }
-
-    #customer-name {
-      width: 96% !important;
-    }
-
     #scanner {
       margin-top: 20px;
     }
-
     #scanned-items {
       margin: 20px 0;
     }
-
     #invoice {
       display: none;
       border-top: 1px solid #ccc;
       padding-top: 20px;
     }
-
     #store-header {
       text-align: center;
     }
-
     #store-header img {
       max-height: 60px;
       margin-bottom: 10px;
     }
-
     ul li {
       cursor: pointer;
     }
-
     ul li:hover {
       background-color: #f2f2f2;
     }
-
     @media print {
       @page {
         size: A6;
         margin: 10mm;
       }
-
       body * {
         visibility: hidden;
       }
-
       #invoice, #invoice * {
         visibility: visible;
       }
-
       #invoice {
         position: absolute;
         left: 0;
         top: 0;
         width: 100%;
       }
-
       button {
         display: none;
       }
@@ -80,14 +63,38 @@
   </style>
 </head>
 <body>
-
 <h2>Auto Invoice Generator</h2>
 
-<label>Customer Name:</label>
-<input type="text" id="customer-name" placeholder="Enter customer name">
+<input type="text" id="customer-name" placeholder="Customer Name">
+<input type="text" id="customer-address" placeholder="Customer Address">
+<input type="text" id="customer-contact" placeholder="Customer Contact">
+<select id="miner-type">
+  <option value="">Select Miner Type</option>
+  <option value="Old Miner">Old Miner</option>
+  <option value="New Miner">New Miner</option>
+</select>
+<input type="date" id="order-date">
+<input type="number" id="num-items" placeholder="Number of Items" readonly>
+<input type="number" id="total-order" placeholder="Total Order Amount" readonly>
+<select id="shipping-status">
+  <option value="">Select Shipping Status</option>
+  <option value="To Ship">To Ship</option>
+  <option value="Shipped">Shipped</option>
+  <option value="Picked Up">Picked Up</option>
+</select>
+<select id="payment-status">
+  <option value="">Select Payment Status</option>
+  <option value="Paid">Paid</option>
+  <option value="With Balance">With Balance</option>
+  <option value="Unpaid">Unpaid</option>
+</select>
+<select id="shipping-fee-status">
+  <option value="">Select Shipping Fee Status</option>
+  <option value="Paid">Paid</option>
+  <option value="Unpaid">Unpaid</option>
+</select>
 
 <button onclick="startScanner()">Start Scanning</button>
-
 <div id="scanner" style="display:none;">
   <div id="reader" width="100%"></div>
   <button onclick="stopScanner()">Done Scanning</button>
@@ -101,6 +108,7 @@
 </div>
 
 <button onclick="generateInvoice()">Generate Invoice</button>
+<button onclick="saveOrder()">Save Order</button>
 <button onclick="resetInvoice()">Reset</button>
 
 <div id="invoice">
@@ -111,40 +119,47 @@
     <p>Tel: 09190954682</p>
     <hr>
   </div>
-
   <p><strong>Invoice No:</strong> <span id="inv-number"></span></p>
   <p><strong>Date & Time:</strong> <span id="inv-date"></span></p>
   <p><strong>Customer:</strong> <span id="inv-customer"></span></p>
-
   <ul id="inv-items"></ul>
   <p><strong>Total:</strong> ₱<span id="inv-total"></span></p>
-
   <p>Thank you for shopping with us!</p>
   <button onclick="window.print()">Print Invoice (A6)</button>
 </div>
 
 <script src="https://unpkg.com/html5-qrcode"></script>
+<script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-database.js"></script>
 <script>
+  const firebaseConfig = {
+        apiKey: "AIzaSyA8hwnrtDAjTQRBaLA-xoEGkBAMoqqqgs8",
+        authDomain: "cbcpos-fc5fd.firebaseapp.com",
+        projectId: "cbcpos-fc5fd",
+        storageBucket: "cbcpos-fc5fd.firebasestorage.app",
+        messagingSenderId: "298186051078",
+        appId: "1:298186051078:web:d311d3f5c8cad50e54bd87",
+        measurementId: "G-SVB5LQ9WF8"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
   let total = 0;
   let items = [];
   let html5QrCode;
   let lastScanTime = 0;
-
-  // 🔊 Beep sound
   const beep = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YYAAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA=");
 
   function startScanner() {
     document.getElementById("scanner").style.display = "block";
     html5QrCode = new Html5Qrcode("reader");
-
     html5QrCode.start(
       { facingMode: "environment" },
       { fps: 10, qrbox: 250 },
       qrCodeMessage => {
         const now = Date.now();
-        if (now - lastScanTime < 1500) return; // 1.5s cooldown
+        if (now - lastScanTime < 1500) return;
         lastScanTime = now;
-
         if (qrCodeMessage.startsWith("P")) {
           const amount = parseInt(qrCodeMessage.replace("P", ""));
           if (!isNaN(amount)) {
@@ -170,7 +185,6 @@
   function updateItemList() {
     const list = document.getElementById("item-list");
     list.innerHTML = "";
-
     items.forEach((item, index) => {
       const li = document.createElement("li");
       li.innerText = `₱${item}`;
@@ -182,8 +196,9 @@
       };
       list.appendChild(li);
     });
-
     document.getElementById("total").innerText = total;
+    document.getElementById("num-items").value = items.length;
+    document.getElementById("total-order").value = total;
   }
 
   function generateInvoice() {
@@ -191,12 +206,10 @@
     const now = new Date();
     const invNumber = "INV-" + now.toISOString().replace(/[-:T]/g, "").slice(0, 15);
     const dateString = now.toLocaleString();
-
     document.getElementById("invoice").style.display = "block";
     document.getElementById("inv-customer").innerText = customerName;
     document.getElementById("inv-number").innerText = invNumber;
     document.getElementById("inv-date").innerText = dateString;
-
     const invList = document.getElementById("inv-items");
     invList.innerHTML = "";
     items.forEach(item => {
@@ -204,7 +217,6 @@
       li.innerText = `₱${item}`;
       invList.appendChild(li);
     });
-
     document.getElementById("inv-total").innerText = total;
   }
 
@@ -212,11 +224,41 @@
     total = 0;
     items = [];
     document.getElementById("customer-name").value = "";
+    document.getElementById("customer-address").value = "";
+    document.getElementById("customer-contact").value = "";
+    document.getElementById("miner-type").value = "";
+    document.getElementById("order-date").value = "";
+    document.getElementById("num-items").value = "";
+    document.getElementById("total-order").value = "";
+    document.getElementById("shipping-status").value = "";
+    document.getElementById("payment-status").value = "";
+    document.getElementById("shipping-fee-status").value = "";
     document.getElementById("item-list").innerHTML = "";
     document.getElementById("total").innerText = "0";
     document.getElementById("invoice").style.display = "none";
   }
-</script>
 
+  function saveOrder() {
+    const order = {
+      customerName: document.getElementById("customer-name").value,
+      customerAddress: document.getElementById("customer-address").value,
+      customerContact: document.getElementById("customer-contact").value,
+      minerType: document.getElementById("miner-type").value,
+      orderDate: document.getElementById("order-date").value,
+      numItems: parseInt(document.getElementById("num-items").value),
+      totalOrder: parseFloat(document.getElementById("total-order").value),
+      shippingStatus: document.getElementById("shipping-status").value,
+      paymentStatus: document.getElementById("payment-status").value,
+      shippingFeeStatus: document.getElementById("shipping-fee-status").value,
+      items: items
+    };
+    db.ref("orders").push(order).then(() => {
+      alert("Order saved to Firebase!");
+      resetInvoice();
+    });
+  }
+
+  document.getElementById("order-date").valueAsDate = new Date();
+</script>
 </body>
 </html>
