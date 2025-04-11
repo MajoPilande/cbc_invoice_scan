@@ -264,30 +264,82 @@
 
   const db = firebase.database();
 
+  // 🔍 Customer auto-fill logic
+  const nameInput = document.getElementById("customer-name");
+  nameInput.addEventListener("input", () => {
+    const query = nameInput.value.toLowerCase();
+    db.ref("customers").once("value").then(snapshot => {
+      const customers = snapshot.val();
+      if (!customers) return;
+
+      for (const [id, customer] of Object.entries(customers)) {
+        if (customer.name.toLowerCase() === query) {
+          document.getElementById("customer-address").value = customer.address || "";
+          document.getElementById("customer-contact").value = customer.contact || "";
+          document.getElementById("miner-type").value = customer.minerType || "";
+          break;
+        }
+      }
+    });
+  });
+
   function saveOrder() {
-    console.log("🟡 Save Order clicked");
+  const customerName = document.getElementById("customer-name").value.trim();
+  const customerAddress = document.getElementById("customer-address").value.trim();
+  const customerContact = document.getElementById("customer-contact").value.trim();
+  const minerType = document.getElementById("miner-type").value;
+  const orderDate = document.getElementById("order-date").value;
 
-    const orderData = {
-      customerName: document.getElementById("customer-name").value,
-      customerAddress: document.getElementById("customer-address").value,
-      customerContact: document.getElementById("customer-contact").value,
-      minerType: document.getElementById("miner-type").value,
-      orderDate: document.getElementById("order-date").value,
-      totalAmount: total,
-      items: items
-    };
+  const orderData = {
+    customerName,
+    customerAddress,
+    customerContact,
+    minerType,
+    orderDate,
+    totalAmount: total,
+    items: items
+  };
 
-    db.ref("orders").push(orderData)
+  // ✅ Save order
+  firebase.database().ref("orders").push(orderData)
     .then(() => {
-      alert("✅ Order saved to Firebase!");
-      console.log("✅ Firebase push successful");
+      alert("✅ Order saved!");
+
+      // 🔁 Check if customer exists by name (case insensitive)
+      firebase.database().ref("customers").once("value").then(snapshot => {
+        const customers = snapshot.val() || {};
+        let exists = false;
+
+        for (const [id, cust] of Object.entries(customers)) {
+          if ((cust.name || "").toLowerCase().trim() === customerName.toLowerCase()) {
+            // ✅ Customer found - update info
+            firebase.database().ref(`customers/${id}`).update({
+              address: customerAddress,
+              contact: customerContact,
+              minerType: minerType
+            });
+            exists = true;
+            break;
+          }
+        }
+
+        if (!exists && customerName) {
+          // ➕ Customer not found - add new
+          firebase.database().ref("customers").push({
+            name: customerName,
+            address: customerAddress,
+            contact: customerContact,
+            minerType: minerType
+          });
+        }
+      });
     })
     .catch(error => {
-      alert("❌ Error saving order: " + error.message);
-      console.error("Firebase Save Error:", error);
+      console.error("❌ Error saving:", error);
+      alert("❌ Error saving order.");
     });
+}
 
-  }
 </script>
 
 </body>
