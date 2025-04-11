@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Order Entry - Curated by Celina</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      max-width: 600px;
+      margin: auto;
+    }
+    input, select, button {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 15px;
+    }
+    h2 {
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <h2>New Order Entry</h2>
+  <form id="orderForm">
+    <input type="text" id="customerName" placeholder="Customer Name" required />
+    <input type="text" id="customerAddress" placeholder="Customer Address" required />
+    <input type="text" id="customerContact" placeholder="Customer Contact Number" required />
+    <select id="minerType" required>
+      <option value="">Select Miner Type</option>
+      <option value="Old Miner">Old Miner</option>
+      <option value="New Miner">New Miner</option>
+    </select>
+    <input type="date" id="orderDate" required />
+    <input type="number" id="numItems" placeholder="Number of Items" required />
+    <input type="number" id="totalOrder" placeholder="Total Order Amount" required />
+
+    <select id="shippingStatus" required>
+      <option value="">Select Shipping Status</option>
+      <option value="To Ship">To Ship</option>
+      <option value="Shipped">Shipped</option>
+      <option value="Picked Up">Picked Up</option>
+    </select>
+
+    <select id="paymentStatus" required>
+      <option value="">Select Payment Status</option>
+      <option value="Paid">Paid</option>
+      <option value="With Balance">With Balance</option>
+      <option value="Unpaid">Unpaid</option>
+    </select>
+
+    <select id="shippingFeeStatus" required>
+      <option value="">Select Shipping Fee Status</option>
+      <option value="Paid">Paid</option>
+      <option value="Unpaid">Unpaid</option>
+    </select>
+
+    <button type="submit">Save Order</button>
+    <a href="index.html">
+        <button type="button">Proceed to Scanning</button>
+    </a>
+      
+  </form>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-database.js"></script>
+  <script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyA8hwnrtDAjTQRBaLA-xoEGkBAMoqqqgs8",
+        authDomain: "cbcpos-fc5fd.firebaseapp.com",
+        projectId: "cbcpos-fc5fd",
+        storageBucket: "cbcpos-fc5fd.firebasestorage.app",
+        messagingSenderId: "298186051078",
+        appId: "1:298186051078:web:d311d3f5c8cad50e54bd87",
+        measurementId: "G-SVB5LQ9WF8"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    document.getElementById("orderDate").valueAsDate = new Date();
+
+    document.getElementById("orderForm").addEventListener("submit", function(e) {
+      e.preventDefault();
+
+      const orderData = {
+        customerName: document.getElementById("customerName").value,
+        customerAddress: document.getElementById("customerAddress").value,
+        customerContact: document.getElementById("customerContact").value,
+        minerType: document.getElementById("minerType").value,
+        orderDate: document.getElementById("orderDate").value,
+        numItems: parseInt(document.getElementById("numItems").value),
+        totalOrder: parseFloat(document.getElementById("totalOrder").value),
+        shippingStatus: document.getElementById("shippingStatus").value,
+        paymentStatus: document.getElementById("paymentStatus").value,
+        shippingFeeStatus: document.getElementById("shippingFeeStatus").value
+      };
+
+      db.ref("orders").push(orderData).then(() => {
+        alert("Order saved successfully!");
+        document.getElementById("orderForm").reset();
+        document.getElementById("orderDate").valueAsDate = new Date();
+      });
+    });
+  </script>
+</body>
+</html>
