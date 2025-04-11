@@ -17,10 +17,6 @@
       margin: 10px 0;
     }
 
-    #customer-name {
-      width: 96% !important;
-    }
-
     #scanner {
       margin-top: 20px;
     }
@@ -144,19 +140,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-database.js"></script>
 <script>
-  const firebaseConfig = {
-    apiKey: "AIzaSyA8hwnrtDAjTQRBaLA-xoEGkBAMoqqqgs8",
-    authDomain: "cbcpos-fc5fd.firebaseapp.com",
-    databaseURL: "https://cbcpos-fc5fd-default-rtdb.asia-southeast1.firebasedatabase.app/",
-    projectId: "cbcpos-fc5fd",
-    storageBucket: "cbcpos-fc5fd.firebasestorage.app",
-    messagingSenderId: "298186051078",
-    appId: "1:298186051078:web:d311d3f5c8cad50e54bd87",
-    measurementId: "G-SVB5LQ9WF8"
-  };
-  firebase.initializeApp(firebaseConfig);
-  const db = firebase.database();
-
   let total = 0;
   let items = [];
   let html5QrCode;
@@ -239,26 +222,6 @@
     document.getElementById("inv-total").innerText = total;
   }
 
-  function saveOrder() {
-    const orderData = {
-      customerName: document.getElementById("customer-name").value,
-      customerAddress: document.getElementById("customer-address").value,
-      customerContact: document.getElementById("customer-contact").value,
-      minerType: document.getElementById("miner-type").value,
-      orderDate: document.getElementById("order-date").value,
-      totalAmount: total,
-      items: items
-    };
-
-    db.ref("orders").push(orderData)
-      .then(() => {
-        alert("Order saved successfully!");
-      })
-      .catch(error => {
-        alert("Error saving order: " + error.message);
-      });
-  }
-
   function resetInvoice() {
     total = 0;
     items = [];
@@ -273,6 +236,35 @@
   }
 
   document.getElementById("order-date").valueAsDate = new Date();
+
+  const firebaseConfig = {
+    apiKey: "your-api-key",
+    authDomain: "your-project-id.firebaseapp.com",
+    databaseURL: "https://your-project-id-default-rtdb.asia-southeast1.firebasedatabase.app/",
+    projectId: "your-project-id",
+    storageBucket: "your-project-id.appspot.com",
+    messagingSenderId: "your-msg-id",
+    appId: "your-app-id"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  function saveOrder() {
+    const orderData = {
+      customerName: document.getElementById("customer-name").value,
+      customerAddress: document.getElementById("customer-address").value,
+      customerContact: document.getElementById("customer-contact").value,
+      minerType: document.getElementById("miner-type").value,
+      orderDate: document.getElementById("order-date").value,
+      totalAmount: total,
+      items: items
+    };
+
+    db.ref("orders").push(orderData)
+      .then(() => alert("✅ Order saved to Firebase!"))
+      .catch(error => alert("❌ Error saving order: " + error.message));
+  }
 </script>
 
 </body>
