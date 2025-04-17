@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Auto Invoice Generator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    input[type="text"], input[type="date"], select {
+    width: 100%;
+    padding: 10px;
+    font-size: 16px;
+    height: 45px;
+    box-sizing: border-box;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+  }
+
+    input, button, select {
+      padding: 10px;
+      width: 100%;
+      margin: 10px 0;
+    }
+
+    #scanner {
+      margin-top: 20px;
+    }
+
+    #scanned-items {
+      margin: 20px 0;
+    }
+
+    #invoice {
+      display: none;
+      border-top: 1px solid #ccc;
+      padding-top: 20px;
+    }
+
+    #store-header {
+      text-align: center;
+    }
+
+    #store-header img {
+      max-height: 60px;
+      margin-bottom: 10px;
+    }
+
+    ul li {
+      cursor: pointer;
+    }
+
+    ul li:hover {
+      background-color: #f2f2f2;
+    }
+
+    @media print {
+      @page {
+        size: A6;
+        margin: 10mm;
+      }
+
+      body * {
+        visibility: hidden;
+      }
+
+      #invoice, #invoice * {
+        visibility: visible;
+      }
+
+      #invoice {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+      }
+
+      button {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<h2>Auto Invoice Generator</h2>
+
+<label>Customer Name:</label>
+<input type="text" id="customer-name" placeholder="Enter customer name">
+
+<label>Customer Address:</label>
+<input type="text" id="customer-address" placeholder="Enter customer address">
+
+<label>Contact Number:</label>
+<input type="text" id="customer-contact" placeholder="Enter contact number">
+
+<label>Miner Type:</label>
+<select id="miner-type">
+  <option value="">Select Miner Type</option>
+  <option value="Old Miner">Old Miner</option>
+  <option value="New Miner">New Miner</option>
+</select>
+
+<label>Date:</label>
+<input type="date" id="order-date">
+
+<!-- Add barcode input field -->
+<label>Barcode Scanner:</label>
+<input type="text" id="barcode-input" placeholder="Scan a barcode" autofocus>
+
+<div id="scanner" style="display:none;">
+  <div id="reader" width="100%"></div>
+  <button onclick="stopScanner()">Done Scanning</button>
+</div>
+
+<div id="scanned-items">
+  <h3>Scanned Items</h3>
+  <ul id="item-list"></ul>
+  <p><strong>Total: ₱<span id="total">0</span></strong></p>
+  <small>Click an item to remove it.</small>
+  <button onclick="saveOrder()">Save Order</button>
+</div>
+
+<button onclick="generateInvoice()">Generate Invoice</button>
+<button onclick="resetInvoice()">Reset</button>
+
+<div id="invoice">
+  <div id="store-header">
+    <img src="https://github.com/MajoPilande/cbc_invoice_scan/blob/83f169f17dfa9d055390b04162231c35988e62eb/logo.jpg" alt="Store Logo">
+    <h3><strong>Curated by Celina</strong></h3>
+    <p>2nd Floor MSP Building, Sto. Cristo, Pulilan, Bulaca</p>
+    <p>Tel: 09190954682</p>
+    <hr>
+  </div>
+
+  <p><strong>Invoice No:</strong> <span id="inv-number"></span></p>
+  <p><strong>Date & Time:</strong> <span id="inv-date"></span></p>
+  <p><strong>Customer:</strong> <span id="inv-customer"></span></p>
+
+  <ul id="inv-items"></ul>
+  <p><strong>Total:</strong> ₱<span id="inv-total"></span></p>
+
+  <p>Thank you for shopping with us!</p>
+  <button onclick="window.print()">Print Invoice (A6)</button>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-database-compat.js"></script>
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+<script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
+
+<script>
+  let total = 0;
+  let items = [];
+  let html5QrCode;
+  let lastScanTime = 0;
+
+  const beep = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YYAAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA=");
+
+  // Function to start scanning
+  // Listen for barcode input (USB barcode scanner sends input as keyboard)
+  document.getElementById("barcode-input").addEventListener("keypress", function (e) {
+    if (e.key === "Enter") {
+      const barcodeValue = document.getElementById("barcode-input").value;
+      if (barcodeValue) {
+        // Assuming barcode value is a price starting with "P" (e.g., "P100")
+        const amount = parseInt(barcodeValue.replace("P", ""));
+        if (!isNaN(amount)) {
+          items.push(amount); // Add item to list
+          total += amount;    // Update total
+          updateItemList();   // Refresh item list
+          beep.play();        // Play beep sound
+        }
+      }
+      document.getElementById("barcode-input").value = ""; // Clear input field after scan
+    }
+  });
+
+  function updateItemList() {
+    const list = document.getElementById("item-list");
+    list.innerHTML = "";
+
+    items.forEach((item, index) => {
+      const li = document.createElement("li");
+      li.innerText = `₱${item}`;
+      li.title = "Click to remove this item";
+      li.onclick = () => {
+        total -= item;
+        items.splice(index, 1);
+        updateItemList();
+      };
+      list.appendChild(li);
+    });
+
+    document.getElementById("total").innerText = total;
+  }
+
+  function generateInvoice() {
+    const customerName = document.getElementById("customer-name").value;
+    const now = new Date();
+    const invNumber = "INV-" + now.toISOString().replace(/[-:T]/g, "").slice(0, 15);
+    const dateString = now.toLocaleString();
+
+    document.getElementById("invoice").style.display = "block";
+    document.getElementById("inv-customer").innerText = customerName;
+    document.getElementById("inv-number").innerText = invNumber;
+    document.getElementById("inv-date").innerText = dateString;
+
+    const invList = document.getElementById("inv-items");
+    invList.innerHTML = "";
+    items.forEach(item => {
+      const li = document.createElement("li");
+      li.innerText = `₱${item}`;
+      invList.appendChild(li);
+    });
+
+    document.getElementById("inv-total").innerText = total;
+  }
+
+  function resetInvoice() {
+    total = 0;
+    items = [];
+    document.getElementById("customer-name").value = "";
+    document.getElementById("customer-address").value = "";
+    document.getElementById("customer-contact").value = "";
+    document.getElementById("miner-type").value = "";
+    document.getElementById("order-date").value = "";
+    document.getElementById("item-list").innerHTML = "";
+    document.getElementById("total").innerText = "0";
+    document.getElementById("invoice").style.display = "none";
+  }
+
+  document.getElementById("order-date").valueAsDate = new Date();
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyA8hwnrtDAjTQRBaLA-xoEGkBAMoqqqgs8",
+    authDomain: "cbcpos-fc5fd.firebaseapp.com",
+    databaseURL: "https://cbcpos-fc5fd-default-rtdb.asia-southeast1.firebasedatabase.app/",
+    projectId: "cbcpos-fc5fd",
+    storageBucket: "cbcpos-fc5fd.firebasestorage.app",
+    messagingSenderId: "298186051078",
+    appId: "1:298186051078:web:d311d3f5c8cad50e54bd87",
+    measurementId: "G-SVB5LQ9WF8"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  console.log("✅ Firebase Initialized");
+
+  const db = firebase.database();
+
+  // 🔍 Customer auto-fill logic
+  const nameInput = document.getElementById("customer-name");
+  nameInput.addEventListener("input", () => {
+    const query = nameInput.value.toLowerCase();
+    db.ref("customers").once("value").then(snapshot => {
+      const customers = snapshot.val();
+      if (!customers) return;
+
+      for (const [id, customer] of Object.entries(customers)) {
+        if (customer.name.toLowerCase() === query) {
+          document.getElementById("customer-address").value = customer.address || "";
+          document.getElementById("customer-contact").value = customer.contact || "";
+          document.getElementById("miner-type").value = customer.minerType || "";
+          break;
+        }
+      }
+    });
+  });
+
+  function saveOrder() {
+  const customerName = document.getElementById("customer-name").value.trim();
+  const customerAddress = document.getElementById("customer-address").value.trim();
+  const customerContact = document.getElementById("customer-contact").value.trim();
+  const minerType = document.getElementById("miner-type").value;
+  const orderDate = document.getElementById("order-date").value;
+
+  const orderData = {
+    customerName,
+    customerAddress,
+    customerContact,
+    minerType,
+    orderDate,
+    totalAmount: total,
+    items: items,
+    paymentStatus: "Unpaid",       // 🟡 Default
+    shippingStatus: "To Ship",     // 📦 Default
+    orderStatus: "Pending"         // 🕒 Default
+  };
+
+  // ✅ Save order
+  firebase.database().ref("orders").push(orderData)
+    .then(() => {
+      alert("✅ Order saved!");
+
+      // 🔁 Check if customer exists by name (case insensitive)
+      firebase.database().ref("customers").once("value").then(snapshot => {
+        const customers = snapshot.val() || {};
+        let exists = false;
+
+        for (const [id, cust] of Object.entries(customers)) {
+          if ((cust.name || "").toLowerCase().trim() === customerName.toLowerCase()) {
+            // ✅ Customer found - update info
+            firebase.database().ref(`customers/${id}`).update({
+              address: customerAddress,
+              contact: customerContact,
+              minerType: minerType
+            });
+            exists = true;
+            break;
+          }
+        }
+
+        if (!exists && customerName) {
+          // ➕ Customer not found - add new
+          firebase.database().ref("customers").push({
+            name: customerName,
+            address: customerAddress,
+            contact: customerContact,
+            minerType: minerType
+          });
+        }
+      });
+    })
+    .catch(error => {
+      console.error("❌ Error saving:", error);
+      alert("❌ Error saving order.");
+    });
+  }
+
+</script>
+
+</body>
+</html>
