@@ -57,6 +57,11 @@
     ul li:hover {
       background-color: #f2f2f2;
     }
+    
+    #manual-amount {
+      display:block;
+      max-width: 96%
+    }
 
     @media print {
       @page {
@@ -107,6 +112,13 @@
 
 <label>Date:</label>
 <input type="date" id="order-date">
+
+<div id="manual-entry">
+  <h4>Manual Entry (Optional)</h4>
+  <label>Amount:</label>
+  <input type="number" id="manual-amount" placeholder="Enter amount">
+  <button onclick="addManualItem()">Add Item</button>
+</div>
 
 <button onclick="startScanner()">Start Scanning</button>
 
@@ -210,6 +222,7 @@
 
     document.getElementById("total").innerText = total;
   }
+
 
   function generateInvoice() {
     const customerName = document.getElementById("customer-name").value;
@@ -342,6 +355,17 @@
       alert("❌ Error saving order.");
     });
   }
+
+  function addManualItem() {
+    const value = parseInt(document.getElementById("manual-amount").value);
+    if (!isNaN(value)) {
+      items.push(value);
+      total += value;
+      updateItemList();
+      document.getElementById("manual-amount").value = "";
+    }
+  }
+
 
 </script>
 
