@@ -19,15 +19,17 @@
 <h2>📊 Daily Sales and Expense Tracker</h2>
 
 <table>
-  <thead>
-    <tr>
-      <th>Date</th>
-      <th>Sales (₱)</th>
-      <th>Expenses (₱)</th>
-      <th>Net (₱)</th>
-      <th>Enter / Update Expense</th>
-    </tr>
-  </thead>
+    <thead>
+        <tr>
+          <th>Date</th>
+          <th>Sales (₱)</th>
+          <th>Expenses (₱)</th>
+          <th>Net (₱)</th>
+          <th>Paid (₱)</th>
+          <th>Unpaid (₱)</th>
+          <th>Enter / Update Expense</th>
+        </tr>
+      </thead>      
   <tbody id="daily-report"></tbody>
 </table>
 
@@ -58,60 +60,85 @@
   let expensesByDate = {};
 
   function loadData() {
-    Promise.all([
-      db.ref("orders").once("value"),
-      db.ref("dailyExpenses").once("value")
-    ]).then(([ordersSnap, expensesSnap]) => {
-      const orders = ordersSnap.val() || {};
-      const expenses = expensesSnap.val() || {};
+        Promise.all([
+            db.ref("orders").once("value"),
+            db.ref("dailyExpenses").once("value")
+        ]).then(([ordersSnap, expensesSnap]) => {
+            const orders = ordersSnap.val() || {};
+            const expenses = expensesSnap.val() || {};
 
-      // Compute sales grouped by date
-      salesByDate = {};
-      Object.values(orders).forEach(order => {
-        const date = order.orderDate;
-        if (!salesByDate[date]) salesByDate[date] = 0;
-        salesByDate[date] += Number(order.totalAmount || 0);
-      });
+            const daily = {}; // Holds all aggregates per date
 
-      expensesByDate = expenses;
+            Object.values(orders).forEach(order => {
+            const date = order.orderDate;
+            if (!daily[date]) {
+                daily[date] = {
+                sales: 0,
+                paid: 0,
+                unpaid: 0,
+                orders: []
+                };
+            }
 
-      const allDates = Array.from(new Set([...Object.keys(salesByDate), ...Object.keys(expenses)]))
-        .sort().reverse(); // latest first
+            const amount = Number(order.totalAmount || 0);
+            daily[date].sales += amount;
 
-      let mtdSales = 0;
-      let mtdExpenses = 0;
+            const status = order.paymentStatus;
+            if (status === "Paid") {
+                daily[date].paid += amount;
+            } else if (status === "Unpaid") {
+                daily[date].unpaid += amount;
+            } else if (status === "With Balance") {
+                const balance = Number(order.balance || 0);
+                daily[date].paid += (amount - balance);
+                daily[date].unpaid += balance;
+            }
+            });
 
-      reportTable.innerHTML = "";
-      allDates.forEach(date => {
-        const sales = salesByDate[date] || 0;
-        const expense = expenses[date] || 0;
-        const net = sales - expense;
-        mtdSales += sales;
-        mtdExpenses += expense;
+            const allDates = Array.from(new Set([...Object.keys(daily), ...Object.keys(expenses)]))
+            .sort().reverse();
 
-        const row = document.createElement("tr");
-        row.innerHTML = `
-          <td>${date}</td>
-          <td>₱${sales.toLocaleString()}</td>
-          <td>₱${expense.toLocaleString()}</td>
-          <td>₱${net.toLocaleString()}</td>
-          <td>
-            <input type="number" id="exp-${date}" value="${expense}" min="0">
-            <button onclick="saveExpense('${date}')">💾 Save</button>
-          </td>
-        `;
-        reportTable.appendChild(row);
-      });
+            let mtdSales = 0, mtdExpenses = 0, mtdPaid = 0, mtdUnpaid = 0;
+            reportTable.innerHTML = "";
 
-      const mtdNet = mtdSales - mtdExpenses;
-      mtdSummary.innerHTML = `
-        🗓️ <strong>Month-to-Date Summary:</strong><br>
-        Total Sales: ₱${mtdSales.toLocaleString()}<br>
-        Total Expenses: ₱${mtdExpenses.toLocaleString()}<br>
-        Net Profit: ₱${mtdNet.toLocaleString()}
-      `;
-    });
-  }
+            allDates.forEach(date => {
+            const d = daily[date] || { sales: 0, paid: 0, unpaid: 0 };
+            const exp = Number(expenses[date] || 0);
+            const net = d.sales - exp;
+
+            mtdSales += d.sales;
+            mtdExpenses += exp;
+            mtdPaid += d.paid;
+            mtdUnpaid += d.unpaid;
+
+            const row = document.createElement("tr");
+            row.innerHTML = `
+                <td>${date}</td>
+                <td>₱${d.sales.toLocaleString()}</td>
+                <td>₱${exp.toLocaleString()}</td>
+                <td>₱${net.toLocaleString()}</td>
+                <td>₱${d.paid.toLocaleString()}</td>
+                <td>₱${d.unpaid.toLocaleString()}</td>
+                <td>
+                <input type="number" id="exp-${date}" value="${exp}" min="0">
+                <button onclick="saveExpense('${date}')">💾 Save</button>
+                </td>
+            `;
+            reportTable.appendChild(row);
+            });
+
+            const mtdNet = mtdSales - mtdExpenses;
+            mtdSummary.innerHTML = `
+            🗓️ <strong>Month-to-Date Summary:</strong><br>
+            Total Sales: ₱${mtdSales.toLocaleString()}<br>
+            Total Paid: ₱${mtdPaid.toLocaleString()}<br>
+            Total Unpaid: ₱${mtdUnpaid.toLocaleString()}<br>
+            Total Expenses: ₱${mtdExpenses.toLocaleString()}<br>
+            Net Profit: ₱${mtdNet.toLocaleString()}
+            `;
+        });
+    }
+
 
   function saveExpense(date) {
     const input = document.getElementById(`exp-${date}`);
