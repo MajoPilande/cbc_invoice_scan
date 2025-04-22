@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Daily Sales and Expenses Report</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 1000px; margin: auto; padding: 20px; }
+    h2 { text-align: center; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 10px; text-align: center; }
+    th { background-color: #f4f4f4; }
+    input[type="number"] { width: 100px; padding: 5px; }
+    button { padding: 5px 10px; margin-left: 5px; }
+    .summary { margin-top: 30px; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+<h2>📊 Daily Sales and Expense Tracker</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Date</th>
+      <th>Sales (₱)</th>
+      <th>Expenses (₱)</th>
+      <th>Net (₱)</th>
+      <th>Enter / Update Expense</th>
+    </tr>
+  </thead>
+  <tbody id="daily-report"></tbody>
+</table>
+
+<div class="summary" id="mtd-summary">
+  Loading month-to-date summary...
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-database-compat.js"></script>
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyA8hwnrtDAjTQRBaLA-xoEGkBAMoqqqgs8",
+    authDomain: "cbcpos-fc5fd.firebaseapp.com",
+    databaseURL: "https://cbcpos-fc5fd-default-rtdb.asia-southeast1.firebasedatabase.app/",
+    projectId: "cbcpos-fc5fd",
+    storageBucket: "cbcpos-fc5fd.firebasestorage.app",
+    messagingSenderId: "298186051078",
+    appId: "1:298186051078:web:d311d3f5c8cad50e54bd87",
+    measurementId: "G-SVB5LQ9WF8"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+  const reportTable = document.getElementById("daily-report");
+  const mtdSummary = document.getElementById("mtd-summary");
+
+  let salesByDate = {};
+  let expensesByDate = {};
+
+  function loadData() {
+    Promise.all([
+      db.ref("orders").once("value"),
+      db.ref("dailyExpenses").once("value")
+    ]).then(([ordersSnap, expensesSnap]) => {
+      const orders = ordersSnap.val() || {};
+      const expenses = expensesSnap.val() || {};
+
+      // Compute sales grouped by date
+      salesByDate = {};
+      Object.values(orders).forEach(order => {
+        const date = order.orderDate;
+        if (!salesByDate[date]) salesByDate[date] = 0;
+        salesByDate[date] += Number(order.totalAmount || 0);
+      });
+
+      expensesByDate = expenses;
+
+      const allDates = Array.from(new Set([...Object.keys(salesByDate), ...Object.keys(expenses)]))
+        .sort().reverse(); // latest first
+
+      let mtdSales = 0;
+      let mtdExpenses = 0;
+
+      reportTable.innerHTML = "";
+      allDates.forEach(date => {
+        const sales = salesByDate[date] || 0;
+        const expense = expenses[date] || 0;
+        const net = sales - expense;
+        mtdSales += sales;
+        mtdExpenses += expense;
+
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${date}</td>
+          <td>₱${sales.toLocaleString()}</td>
+          <td>₱${expense.toLocaleString()}</td>
+          <td>₱${net.toLocaleString()}</td>
+          <td>
+            <input type="number" id="exp-${date}" value="${expense}" min="0">
+            <button onclick="saveExpense('${date}')">💾 Save</button>
+          </td>
+        `;
+        reportTable.appendChild(row);
+      });
+
+      const mtdNet = mtdSales - mtdExpenses;
+      mtdSummary.innerHTML = `
+        🗓️ <strong>Month-to-Date Summary:</strong><br>
+        Total Sales: ₱${mtdSales.toLocaleString()}<br>
+        Total Expenses: ₱${mtdExpenses.toLocaleString()}<br>
+        Net Profit: ₱${mtdNet.toLocaleString()}
+      `;
+    });
+  }
+
+  function saveExpense(date) {
+    const input = document.getElementById(`exp-${date}`);
+    const value = Number(input.value || 0);
+    db.ref(`dailyExpenses/${date}`).set(value).then(() => {
+      loadData();
+    });
+  }
+
+  loadData();
+</script>
+
+</body>
+</html>

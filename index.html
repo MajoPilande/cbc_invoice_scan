@@ -95,7 +95,8 @@
 <h2>Auto Invoice Generator</h2>
 
 <label>Customer Name:</label>
-<input type="text" id="customer-name" placeholder="Enter customer name">
+<input type="text" id="customer-name" list="customer-list" placeholder="Enter customer name">
+<datalist id="customer-list"></datalist>
 
 <label>Customer Address:</label>
 <input type="text" id="customer-address" placeholder="Enter customer address">
@@ -277,16 +278,35 @@
 
   const db = firebase.database();
 
-  // 🔍 Customer auto-fill logic
-  const nameInput = document.getElementById("customer-name");
-  nameInput.addEventListener("input", () => {
-    const query = nameInput.value.toLowerCase();
+  function loadCustomerList() {
+    const datalist = document.getElementById("customer-list");
+    datalist.innerHTML = "";
+
     db.ref("customers").once("value").then(snapshot => {
       const customers = snapshot.val();
       if (!customers) return;
 
-      for (const [id, customer] of Object.entries(customers)) {
-        if (customer.name.toLowerCase() === query) {
+      Object.values(customers).forEach(customer => {
+        const option = document.createElement("option");
+        option.value = customer.name;
+        datalist.appendChild(option);
+      });
+    });
+  }
+
+  loadCustomerList(); // Call this after Firebase init
+
+
+  // 🔍 Customer auto-fill logic
+  const nameInput = document.getElementById("customer-name");
+  nameInput.addEventListener("change", () => {
+    const query = nameInput.value.trim().toLowerCase();
+    db.ref("customers").once("value").then(snapshot => {
+      const customers = snapshot.val();
+      if (!customers) return;
+
+      for (const customer of Object.values(customers)) {
+        if ((customer.name || "").trim().toLowerCase() === query) {
           document.getElementById("customer-address").value = customer.address || "";
           document.getElementById("customer-contact").value = customer.contact || "";
           document.getElementById("miner-type").value = customer.minerType || "";
@@ -295,6 +315,7 @@
       }
     });
   });
+
 
   function saveOrder() {
   const customerName = document.getElementById("customer-name").value.trim();
