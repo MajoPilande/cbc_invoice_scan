@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Add to Inventory</title>
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-database-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; max-width: 900px; margin: auto; }
+    label, input, select { display: block; width: 100%; margin-bottom: 15px; }
+    .suggested, .suggested-price { margin-top: -10px; margin-bottom: 15px; color: gray; font-size: 0.9em; }
+    #barcode-container { text-align: center; margin-top: 20px; }
+    canvas.barcode-label { margin: 5px; border: 1px solid #ccc; }
+    #sheet-container { display: flex; flex-wrap: wrap; justify-content: start; gap: 4px; margin-top: 20px; }
+    canvas#preview-barcode { display: block; margin: auto; margin-bottom: 10px; border: 1px solid #aaa; }
+  </style>
+</head>
+<body>
+  <h2>Add Item to Inventory</h2>
+  <label>Category:
+    <select id="category">
+      <option value="Dress">Dress</option>
+      <option value="Romper">Romper</option>
+      <option value="Top">Top</option>
+      <option value="Bottoms">Bottoms</option>
+      <option value="Sets">Sets</option>
+      <option value="Accessories">Accessories</option>
+      <option value="Shoes">Shoes</option>
+    </select>
+  </label>
+
+  <label>Level:
+    <select id="level">
+      <option value="Premium">Premium</option>
+      <option value="Regular">Regular</option>
+      <option value="Budget">Budget</option>
+      <option value="Flawed">Flawed</option>
+    </select>
+  </label>
+
+  <div class="suggested-price">Suggested Price Range: <span id="suggested-price">(choose category and level)</span></div>
+
+  <label>Price:
+    <input type="number" id="price">
+  </label>
+
+  <label>Bale ID:
+    <input type="text" id="baleId" placeholder="e.g. B3">
+  </label>
+
+  <div class="suggested">Generated Barcode: <span id="generated-barcode">(waiting...)</span></div>
+
+  <div id="barcode-container">
+    <canvas id="preview-barcode" width="200" height="80"></canvas>
+    <button onclick="downloadBarcode()">Download Single Barcode</button>
+  </div>
+
+  <button onclick="addToInventory()">Add to Inventory</button>
+
+  <h3>Barcode Sheet Preview</h3>
+  <div id="sheet-container"></div>
+  <button onclick="downloadBarcodeSheet()">Download Full Barcode Sheet (PNG)</button>
+
+  <script>
+    const firebaseConfig = { apiKey: "AIzaSyA8hwnrtDAjTQRBaLA-xoEGkBAMoqqqgs8",
+    authDomain: "cbcpos-fc5fd.firebaseapp.com",
+    databaseURL: "https://cbcpos-fc5fd-default-rtdb.asia-southeast1.firebasedatabase.app/",
+    projectId: "cbcpos-fc5fd",
+    storageBucket: "cbcpos-fc5fd.firebasestorage.app",
+    messagingSenderId: "298186051078",
+    appId: "1:298186051078:web:d311d3f5c8cad50e54bd87",
+    measurementId: "G-SVB5LQ9WF8" };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    const categoryCodes = { Dress: 'DR', Romper: 'RM', Top: 'TP', Bottoms: 'BT', Sets: 'ST', Accessories: 'AC', Shoes: 'SH' };
+    const levelCodes = { Premium: 'PR', Regular: 'RG', Budget: 'BG', Flawed: 'FL' };
+
+    const pricingMatrix = {
+      Dress: { Premium: "P450-P800", Regular: "P250-P450", Budget: "P150-P250", Flawed: "P50-P80" },
+      Romper: { Premium: "P450-P800", Regular: "P250-P450", Budget: "P100-P150", Flawed: "P50-P80" },
+      Top: { Premium: "P350-P500", Regular: "P200-P350", Budget: "P80-P200", Flawed: "P50-P80" },
+      Bottoms: { Premium: "P350-P500", Regular: "P200-P350", Budget: "P80-P200", Flawed: "P50-P80" },
+      Sets: { Premium: "P500-P750", Regular: "P350-P400", Budget: "P250-P300", Flawed: "P100-P200" },
+      Accessories: { Premium: "P100-P120", Regular: "P70-P80", Budget: "P50-P60", Flawed: "P30" },
+      Shoes: { Premium: "P400-P500", Regular: "P300-P350", Budget: "P200-P250", Flawed: "P100" },
+    };
+
+    function updateSuggestedPrice() {
+      const cat = document.getElementById('category').value;
+      const lvl = document.getElementById('level').value;
+      if (cat && lvl) {
+        document.getElementById('suggested-price').textContent = pricingMatrix[cat][lvl] || '(not defined)';
+      } else {
+        document.getElementById('suggested-price').textContent = '(choose category and level)';
+      }
+      showBarcodePreview();
+    }
+
+    function generateBarcode() {
+      const cat = document.getElementById('category').value;
+      const lvl = document.getElementById('level').value;
+      const price = document.getElementById('price').value;
+      const bale = document.getElementById('baleId').value;
+
+      if (!cat || !lvl || !price || !bale) return null;
+
+      const now = new Date();
+      const timestamp = now.toISOString().replace(/[-:.TZ]/g, '').slice(0, 12);
+      return `${categoryCodes[cat]}-${levelCodes[lvl]}-${price}-${bale}-${timestamp}`;
+    }
+
+    function showBarcodePreview() {
+      const code = generateBarcode();
+      if (!code) return;
+      document.getElementById('generated-barcode').textContent = code;
+      const category = document.getElementById('category').value;
+      const price = document.getElementById('price').value;
+      const label = `${category} - P${price}`;
+      const previewCanvas = document.getElementById('preview-barcode');
+      JsBarcode(previewCanvas, code, { format: "CODE128", displayValue: true, height: 40, fontSize: 12, text: label });
+    }
+
+    function renderBarcodeCanvas(code, labelText) {
+      const canvas = document.createElement('canvas');
+      canvas.className = 'barcode-label';
+      canvas.width = 200;
+      canvas.height = 80;
+      JsBarcode(canvas, code, { format: "CODE128", displayValue: true, height: 40, fontSize: 12, text: labelText });
+      document.getElementById('sheet-container').appendChild(canvas);
+    }
+
+    function downloadBarcode() {
+      const canvas = document.getElementById("preview-barcode");
+      if (!canvas) return;
+      const link = document.createElement('a');
+      link.download = "barcode.png";
+      link.href = canvas.toDataURL();
+      link.click();
+    }
+
+    function downloadBarcodeSheet() {
+      const sheet = document.createElement('canvas');
+      const cols = 5, rows = 10, cellWidth = 200, cellHeight = 80;
+      sheet.width = cols * cellWidth;
+      sheet.height = rows * cellHeight;
+      const ctx = sheet.getContext('2d');
+      const barcodes = document.querySelectorAll("canvas.barcode-label");
+
+      barcodes.forEach((c, i) => {
+        const x = (i % cols) * cellWidth;
+        const y = Math.floor(i / cols) * cellHeight;
+        ctx.drawImage(c, x, y);
+      });
+
+      const link = document.createElement('a');
+      link.download = "barcode-sheet.png";
+      link.href = sheet.toDataURL();
+      link.click();
+    }
+
+    function addToInventory() {
+      const code = generateBarcode();
+      if (!code) return alert("Please complete all fields.");
+
+      const category = document.getElementById('category').value;
+      const level = document.getElementById('level').value;
+      const price = parseFloat(document.getElementById('price').value);
+      const baleId = document.getElementById('baleId').value;
+
+      const item = {
+        barcode: code,
+        category,
+        level,
+        price,
+        baleId,
+        status: 'unsold'
+      };
+
+      db.ref('inventory/' + code).set(item)
+        .then(() => {
+          alert('Item added successfully!');
+          const label = `${category} - P${price}`;
+          renderBarcodeCanvas(code, label);
+        })
+        .catch(err => alert('Error: ' + err.message));
+    }
+
+    ['category', 'level', 'price', 'baleId'].forEach(id => {
+      document.getElementById(id).addEventListener('input', showBarcodePreview);
+    });
+</script>
+
+</body>
+</html>
