@@ -72,124 +72,137 @@
     appId: "1:298186051078:web:d311d3f5c8cad50e54bd87",
     measurementId: "G-SVB5LQ9WF8" };
     firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
+  const db = firebase.database();
 
-    const categoryCodes = { Dress: 'DR', Romper: 'RM', Top: 'TP', Bottoms: 'BT', Sets: 'ST', Accessories: 'AC', Shoes: 'SH' };
-    const levelCodes = { Premium: 'PR', Regular: 'RG', Budget: 'BG', Flawed: 'FL' };
+  const categoryCodes = { Dress: 'DR', Romper: 'RM', Top: 'TP', Bottoms: 'BT', Sets: 'ST', Accessories: 'AC', Shoes: 'SH' };
+  const levelCodes = { Premium: 'PR', Regular: 'RG', Budget: 'BG', Flawed: 'FL' };
 
-    const pricingMatrix = {
-      Dress: { Premium: "P450-P800", Regular: "P250-P450", Budget: "P150-P250", Flawed: "P50-P80" },
-      Romper: { Premium: "P450-P800", Regular: "P250-P450", Budget: "P100-P150", Flawed: "P50-P80" },
-      Top: { Premium: "P350-P500", Regular: "P200-P350", Budget: "P80-P200", Flawed: "P50-P80" },
-      Bottoms: { Premium: "P350-P500", Regular: "P200-P350", Budget: "P80-P200", Flawed: "P50-P80" },
-      Sets: { Premium: "P500-P750", Regular: "P350-P400", Budget: "P250-P300", Flawed: "P100-P200" },
-      Accessories: { Premium: "P100-P120", Regular: "P70-P80", Budget: "P50-P60", Flawed: "P30" },
-      Shoes: { Premium: "P400-P500", Regular: "P300-P350", Budget: "P200-P250", Flawed: "P100" },
+  const pricingMatrix = {
+    Dress: { Premium: "P450-P800", Regular: "P250-P450", Budget: "P150-P250", Flawed: "P50-P80" },
+    Romper: { Premium: "P450-P800", Regular: "P250-P450", Budget: "P100-P150", Flawed: "P50-P80" },
+    Top: { Premium: "P350-P500", Regular: "P200-P350", Budget: "P80-P200", Flawed: "P50-P80" },
+    Bottoms: { Premium: "P350-P500", Regular: "P200-P350", Budget: "P80-P200", Flawed: "P50-P80" },
+    Sets: { Premium: "P500-P750", Regular: "P350-P400", Budget: "P250-P300", Flawed: "P100-P200" },
+    Accessories: { Premium: "P100-P120", Regular: "P70-P80", Budget: "P50-P60", Flawed: "P30" },
+    Shoes: { Premium: "P400-P500", Regular: "P300-P350", Budget: "P200-P250", Flawed: "P100" }
+  };
+
+  function updateSuggestedPrice() {
+    const cat = document.getElementById('category').value;
+    const lvl = document.getElementById('level').value;
+    if (cat && lvl) {
+      document.getElementById('suggested-price').textContent = pricingMatrix[cat][lvl] || '(not defined)';
+    } else {
+      document.getElementById('suggested-price').textContent = '(choose category and level)';
+    }
+    showBarcodePreview();
+  }
+
+  function generateBarcode() {
+    const cat = document.getElementById('category').value;
+    const lvl = document.getElementById('level').value;
+    const price = document.getElementById('price').value;
+    const bale = document.getElementById('baleId').value;
+
+    if (!cat || !lvl || !price || !bale) return null;
+
+    const now = new Date();
+    const timestamp = now.toISOString().replace(/[-:.TZ]/g, '').slice(0, 12);
+    return `${categoryCodes[cat]}-${levelCodes[lvl]}-${price}-${bale}-${timestamp}`;
+  }
+
+  function showBarcodePreview() {
+    const code = generateBarcode();
+    if (!code) return;
+    document.getElementById('generated-barcode').textContent = code;
+    const category = document.getElementById('category').value;
+    const price = document.getElementById('price').value;
+    const label = `${category} - P${price}`;
+    const previewCanvas = document.getElementById('preview-barcode');
+    JsBarcode(previewCanvas, code, { format: "CODE128", displayValue: true, height: 40, fontSize: 12, text: label });
+  }
+
+  function renderBarcodeCanvas(code, labelText) {
+    const canvas = document.createElement('canvas');
+    canvas.className = 'barcode-label';
+    canvas.width = 300;
+    canvas.height = 80;
+    JsBarcode(canvas, code, { format: "CODE128", displayValue: true, height: 40, fontSize: 12, text: labelText });
+    document.getElementById('sheet-container').appendChild(canvas);
+  }
+
+  function downloadBarcode() {
+    const canvas = document.getElementById("preview-barcode");
+    if (!canvas) return;
+    const link = document.createElement('a');
+    link.download = "barcode.png";
+    link.href = canvas.toDataURL();
+    link.click();
+  }
+
+  function downloadBarcodeSheet() {
+    const sheet = document.createElement('canvas');
+    const cols = 5, rows = 10, cellWidth = 300, cellHeight = 80;
+    sheet.width = cols * cellWidth;
+    sheet.height = rows * cellHeight;
+    const ctx = sheet.getContext('2d');
+    const barcodes = document.querySelectorAll("canvas.barcode-label");
+
+    barcodes.forEach((c, i) => {
+      const x = (i % cols) * cellWidth;
+      const y = Math.floor(i / cols) * cellHeight;
+      ctx.drawImage(c, x, y);
+    });
+
+    const link = document.createElement('a');
+    link.download = "barcode-sheet.png";
+    link.href = sheet.toDataURL();
+    link.click();
+  }
+
+  function resetForm() {
+    document.getElementById('category').value = '';
+    document.getElementById('level').value = '';
+    document.getElementById('price').value = '';
+    document.getElementById('baleId').value = '';
+    document.getElementById('generated-barcode').textContent = '(waiting...)';
+    const canvas = document.getElementById('preview-barcode');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    updateSuggestedPrice();
+  }
+
+  function addToInventory() {
+    const code = generateBarcode();
+    if (!code) return alert("Please complete all fields.");
+
+    const category = document.getElementById('category').value;
+    const level = document.getElementById('level').value;
+    const price = parseFloat(document.getElementById('price').value);
+    const baleId = document.getElementById('baleId').value;
+
+    const item = {
+      barcode: code,
+      category,
+      level,
+      price,
+      baleId,
+      status: 'unsold'
     };
 
-    function updateSuggestedPrice() {
-      const cat = document.getElementById('category').value;
-      const lvl = document.getElementById('level').value;
-      if (cat && lvl) {
-        document.getElementById('suggested-price').textContent = pricingMatrix[cat][lvl] || '(not defined)';
-      } else {
-        document.getElementById('suggested-price').textContent = '(choose category and level)';
-      }
-      showBarcodePreview();
-    }
+    db.ref('inventory/' + code).set(item)
+      .then(() => {
+        alert('Item added successfully!');
+        const label = `${category} - P${price}`;
+        renderBarcodeCanvas(code, label);
+        resetForm();
+      })
+      .catch(err => alert('Error: ' + err.message));
+  }
 
-    function generateBarcode() {
-      const cat = document.getElementById('category').value;
-      const lvl = document.getElementById('level').value;
-      const price = document.getElementById('price').value;
-      const bale = document.getElementById('baleId').value;
-
-      if (!cat || !lvl || !price || !bale) return null;
-
-      const now = new Date();
-      const timestamp = now.toISOString().replace(/[-:.TZ]/g, '').slice(0, 12);
-      return `${categoryCodes[cat]}-${levelCodes[lvl]}-${price}-${bale}-${timestamp}`;
-    }
-
-    function showBarcodePreview() {
-      const code = generateBarcode();
-      if (!code) return;
-      document.getElementById('generated-barcode').textContent = code;
-      const category = document.getElementById('category').value;
-      const price = document.getElementById('price').value;
-      const label = `${category} - P${price}`;
-      const previewCanvas = document.getElementById('preview-barcode');
-      JsBarcode(previewCanvas, code, { format: "CODE128", displayValue: true, height: 40, fontSize: 12, text: label });
-    }
-
-    function renderBarcodeCanvas(code, labelText) {
-      const canvas = document.createElement('canvas');
-      canvas.className = 'barcode-label';
-      canvas.width = 200;
-      canvas.height = 80;
-      JsBarcode(canvas, code, { format: "CODE128", displayValue: true, height: 40, fontSize: 12, text: labelText });
-      document.getElementById('sheet-container').appendChild(canvas);
-    }
-
-    function downloadBarcode() {
-      const canvas = document.getElementById("preview-barcode");
-      if (!canvas) return;
-      const link = document.createElement('a');
-      link.download = "barcode.png";
-      link.href = canvas.toDataURL();
-      link.click();
-    }
-
-    function downloadBarcodeSheet() {
-      const sheet = document.createElement('canvas');
-      const cols = 5, rows = 10, cellWidth = 200, cellHeight = 80;
-      sheet.width = cols * cellWidth;
-      sheet.height = rows * cellHeight;
-      const ctx = sheet.getContext('2d');
-      const barcodes = document.querySelectorAll("canvas.barcode-label");
-
-      barcodes.forEach((c, i) => {
-        const x = (i % cols) * cellWidth;
-        const y = Math.floor(i / cols) * cellHeight;
-        ctx.drawImage(c, x, y);
-      });
-
-      const link = document.createElement('a');
-      link.download = "barcode-sheet.png";
-      link.href = sheet.toDataURL();
-      link.click();
-    }
-
-    function addToInventory() {
-      const code = generateBarcode();
-      if (!code) return alert("Please complete all fields.");
-
-      const category = document.getElementById('category').value;
-      const level = document.getElementById('level').value;
-      const price = parseFloat(document.getElementById('price').value);
-      const baleId = document.getElementById('baleId').value;
-
-      const item = {
-        barcode: code,
-        category,
-        level,
-        price,
-        baleId,
-        status: 'unsold'
-      };
-
-      db.ref('inventory/' + code).set(item)
-        .then(() => {
-          alert('Item added successfully!');
-          const label = `${category} - P${price}`;
-          renderBarcodeCanvas(code, label);
-        })
-        .catch(err => alert('Error: ' + err.message));
-    }
-
-    ['category', 'level', 'price', 'baleId'].forEach(id => {
-      document.getElementById(id).addEventListener('input', showBarcodePreview);
-    });
+  ['category', 'level', 'price', 'baleId'].forEach(id => {
+    document.getElementById(id).addEventListener('input', showBarcodePreview);
+  });
 </script>
 
 </body>
