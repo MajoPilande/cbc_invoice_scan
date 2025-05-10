@@ -160,6 +160,7 @@
           <button onclick="generateInvoiceMessage('${order.customerName}', ${order.totalAmount})">
             Generate Msg
           </button>
+          // <button onclick="generateSmallClaimsMessage('${order.customerName}', ${order.totalAmount}, '${order.orderDate}')">Small Claims Reminder</button>
         </td>
       `;
       tableBody.appendChild(row);
@@ -220,6 +221,21 @@
     document.getElementById("invoice-text").value = message;
     document.getElementById("invoice-modal").style.display = "block";
   }
+
+  function generateSmallClaimsMessage(name, totalAmount, orderDate) {
+    const message = 
+    `Good day ${name},
+
+    Please be informed that your unclaimed item last ${orderDate} during our live selling remains unpaid despite confirmation. Under the Philippine Civil Code, this constitutes a valid agreement.
+
+    This is a final reminder to settle the amount of ₱${totalAmount} within 3 working days. Failure to do so will result in the inclusion of your name in a formal complaint to the Barangay and Small Claims Court. 
+
+    Thank you.`;
+
+      document.getElementById("invoice-text").value = message;
+      document.getElementById("invoice-modal").style.display = "block";
+  }
+
 
   function copyInvoiceMessage() {
     const msgBox = document.getElementById("invoice-text");
